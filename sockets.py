@@ -14,7 +14,8 @@
 # limitations under the License.
 #
 import flask
-from flask import Flask, request
+from flask import Flask, request, redirect
+from flask.wrappers import Response
 from flask_sockets import Sockets
 import gevent
 from gevent import queue
@@ -25,6 +26,35 @@ import os
 app = Flask(__name__)
 sockets = Sockets(app)
 app.debug = True
+
+# Websocket handling are heavily borrowed from leacture examples. 
+# author: Abramb Hindle
+# URL: https://github.com/abramhindle/WebSocketsExamples/blob/master/chat.py
+
+class Client:
+    CLIENTS = list()
+
+    def __init__(self):
+        self.queue = queue.Queue()
+
+    def put(self, msg):
+        self.queue.put(msg)
+    
+    def get(self):
+        return self.queue.get()
+    
+    @classmethod
+    def put_to_all_clients(cls, msg):
+        for client in cls.CLIENTS:
+            client.put(msg)
+    
+    @classmethod
+    def append_to_clients(cls, client):
+        cls.CLIENTS.append(client)
+    
+    @classmethod
+    def remove_from_clients(cls, client):
+        cls.CLIENTS.remove(client)
 
 class World:
     def __init__(self):
@@ -69,20 +99,41 @@ myWorld.add_set_listener( set_listener )
 @app.route('/')
 def hello():
     '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return None
+    return redirect('/static/index.html')
 
 def read_ws(ws,client):
     '''A greenlet function that reads from the websocket and updates the world'''
-    # XXX: TODO IMPLEMENT ME
-    return None
+    try:
+        while True:
+            msg = ws.receive()
+            print (f"WS RECV: {msg}")
+            if (msg is not None):
+                Client.put_to_all_clients(msg)
+                packet = json.loads(msg)
+                for key, value in packet.items():
+                    myWorld.set(key, value)
+            else:
+                break
+    except:
+        '''Done'''
 
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
     '''Fufill the websocket URL of /subscribe, every update notify the
        websocket and read updates from the websocket '''
-    # XXX: TODO IMPLEMENT ME
-    return None
+    client = Client()
+    Client.append_to_clients(client)
 
+    gvt = gevent.spawn(read_ws, ws, client)
+    try:
+        while True:
+            msg = client.get()
+            ws.send(msg)
+    except Exception as e:
+        print("WS Error in subscribe socket: " + e)
+    finally:
+        Client.remove_from_clients(client)
+        gevent.kill(gvt)
 
 # I give this to you, this is how you get the raw body/data portion of a post in flask
 # this should come with flask but whatever, it's not my project.
@@ -99,23 +150,37 @@ def flask_post_json():
 @app.route("/entity/<entity>", methods=['POST','PUT'])
 def update(entity):
     '''update the entities via this interface'''
-    return None
+    try:
+        data = request.get_json(force=True)
+        if data == None:
+            return Response("No valid POST/PUT data detected", status=400)
+    except:
+        return Response("Invalid JSON format", status=400)
+
+    for key, value in data.items():
+        myWorld.update(entity=entity, key=key, value=value)
+
+    json_str = json.dumps(myWorld.get(entity))
+    return Response(json_str, content_type='application/json', status=200)
 
 @app.route("/world", methods=['POST','GET'])    
 def world():
     '''you should probably return the world here'''
-    return None
+    json_world = json.dumps(myWorld.world())
+    return Response(json_world, content_type='application/json', status=200)
 
 @app.route("/entity/<entity>")    
 def get_entity(entity):
     '''This is the GET version of the entity interface, return a representation of the entity'''
-    return None
+    json_entity = json.dumps(myWorld.get(entity))
+    return Response(json_entity, content_type='application/json', status=200)
 
 
 @app.route("/clear", methods=['POST','GET'])
 def clear():
     '''Clear the world out!'''
-    return None
+    myWorld.clear()
+    return Response('{}', content_type='application/json', status=200)
 
 
 

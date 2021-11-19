@@ -59,3 +59,25 @@ Contributors
 * Mark Galloway
 * Abram Hindle
 * Cole Mackenzie
+
+Submission Informations
+=======================
+
+This is the submission made by Steven Heung, CMPUT 404 F21.
+
+Everything is licensed under the same BSD-like license for freetest.py.
+
+References
+==========
+
+Server Websocket handling are borrowed from lecture examples.
+
+Author: Abram Hindle
+
+URL: https://github.com/abramhindle/WebSocketsExamples/blob/master/chat.py
+
+A lot of the code in socket.py and index.html are reused from my assignment 4.
+
+Authors: (Myself), Abram Hindle
+
+URL: https://github.com/flyrobot27/CMPUT404-assignment-ajax
